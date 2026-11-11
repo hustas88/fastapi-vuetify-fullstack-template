@@ -1,0 +1,70 @@
+name: Backend
+
+# Mirrors the `backend:lint` / `backend:test` GitLab jobs (ci/backend.gitlab-ci.yml).
+# Tests use SQLite in memory, so no database service is required.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "compose.yml"
+      - "compose.override.yml"
+      - ".github/workflows/backend.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - "compose.yml"
+      - "compose.override.yml"
+      - ".github/workflows/backend.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # uv and Python versions match the Dockerfile build args, so CI and the
+      # container image resolve the same toolchain.
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.7"
+          python-version: "3.15"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.7"
+          python-version: "3.15"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - run: uv sync --frozen
+      # `AUTO_CREATE_SCHEMA` stays off: the suite creates its own SQLite schema.
+      - run: uv run pytest -q
+        env:
+          AUTO_CREATE_SCHEMA: "false"

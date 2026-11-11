@@ -1,0 +1,66 @@
+# Local development: Mailpit, backend hot reload and the Vite dev server.
+# Nothing here is part of the deployed stack.
+#
+# Use `docker compose up` (or `make dev`).
+services:
+  mailpit:
+    # Local only. Official upstream image; `v1` is a rolling tag — pin e.g.
+    # `v1.33.1` for reproducibility.
+    image: axllent/mailpit:v1
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+
+  backend:
+    build:
+      target: dev
+    command:
+      [
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--reload",
+      ]
+    depends_on:
+      mailpit:
+        condition: service_started
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/tests:/app/tests
+      - ./backend/alembic:/app/alembic
+      - ./backend/alembic.ini:/app/alembic.ini
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      target: dev
+    command:
+      [
+        "pnpm",
+        "--filter",
+        "@app/frontend",
+        "dev",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "5173",
+      ]
+    env_file: .env.frontend
+    volumes:
+      - ./frontend:/app/frontend
+      - ./package.json:/app/package.json
+      - ./pnpm-workspace.yaml:/app/pnpm-workspace.yaml
+      # Keep container-installed dependencies out of the bind mount
+      - frontend_node_modules:/app/frontend/node_modules
+      - root_node_modules:/app/node_modules
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+
+volumes:
+  frontend_node_modules:
+  root_node_modules:

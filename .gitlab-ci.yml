@@ -1,0 +1,49 @@
+stages:
+  - test
+  - build
+  - deploy
+
+include:
+  - local: ci/backend.gitlab-ci.yml
+  - local: ci/frontend.gitlab-ci.yml
+
+variables:
+  GIT_DEPTH: "20"
+  DOCKER_TLS_CERTDIR: "/certs"
+  # Pipeline trigger matrix (set these when running a pipeline manually from
+  # the GitLab UI / API):
+  #   BUILD_ALL=true        -> build backend + frontend
+  #   BUILD_BACKEND=true    -> force backend
+  #   BUILD_FRONTEND=true   -> force frontend
+  #   BUILD_BACKEND=false   -> skip backend
+  #   BUILD_FRONTEND=false  -> skip frontend
+  # When unset, changes are detected from the diff. If nothing matched, the
+  # jobs are exposed as manual actions so you can still start them.
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS'
+      when: never
+    - if: '$CI_COMMIT_BRANCH'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "api"'
+
+# ---------------------------------------------------------------------------
+# Deployment
+#
+# Intentionally not configured:
+#   * Frontend: take the `frontend:build` artifact (frontend/dist) and sync it
+#     to your static S3 website. Add a job in the `deploy` stage, for example:
+#
+#       frontend:deploy:s3:
+#         stage: deploy
+#         image: amazon/aws-cli
+#         needs: ["frontend:build"]
+#         rules:
+#           - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+#         script:
+#           - aws s3 sync frontend/dist "s3://$S3_BUCKET" --delete
+#
+#   * Backend: deploy the image pushed by `backend:docker`.
+# ---------------------------------------------------------------------------

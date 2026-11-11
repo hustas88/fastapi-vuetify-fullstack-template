@@ -1,0 +1,42 @@
+# --- Environment -----------------------------------------------------------
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.test
+
+# --- Python ----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.uv-cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# --- Node / pnpm -----------------------------------------------------------
+node_modules/
+.pnpm-store/
+.pnpm/
+dist/
+dist-ssr/
+*.local
+.vite/
+coverage/
+.eslintcache
+
+# --- Docker / data ---------------------------------------------------------
+pgdata/
+*.log
+
+# --- Editors / OS ----------------------------------------------------------
+.idea/
+.DS_Store
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json

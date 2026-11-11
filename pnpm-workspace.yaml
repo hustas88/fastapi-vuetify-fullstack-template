@@ -1,0 +1,11 @@
+packages:
+  - frontend
+
+# pnpm >= 10 does not run dependency install scripts unless they are allowed.
+onlyBuiltDependencies:
+  - esbuild
+
+# pnpm >= 11 blocks packages published in the last few days by default. Keep it
+# off so CI installs are deterministic (the lockfile already pins exact
+# versions); raise it if you prefer a cooling-off period.
+minimumReleaseAge: 0

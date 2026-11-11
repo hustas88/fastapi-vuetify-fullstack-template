@@ -1,0 +1,51 @@
+# Frontend pipeline: typecheck + static build.
+#
+# The `frontend/dist` artifact is what gets uploaded to the static S3 website.
+
+.frontend-rules:
+  rules:
+    - if: '$BUILD_ALL == "true"'
+      when: on_success
+    - if: '$BUILD_FRONTEND == "false"'
+      when: never
+    - if: '$BUILD_FRONTEND == "true"'
+      when: on_success
+    - changes:
+        - frontend/**/*
+        - package.json
+        - pnpm-workspace.yaml
+        - pnpm-lock.yaml
+        - ci/frontend.gitlab-ci.yml
+        - .gitlab-ci.yml
+      when: on_success
+    - when: manual
+      allow_failure: true
+
+.frontend-base:
+  image: node:26-alpine
+  variables:
+    PNPM_STORE_DIR: "$CI_PROJECT_DIR/.pnpm-store"
+  cache:
+    key:
+      files:
+        - pnpm-lock.yaml
+    paths:
+      - .pnpm-store/
+  before_script:
+    - npm install -g pnpm@12.18.0
+    - pnpm config set store-dir "$PNPM_STORE_DIR"
+    - pnpm install --frozen-lockfile
+
+frontend:build:
+  extends:
+    - .frontend-base
+    - .frontend-rules
+  stage: build
+  script:
+    # `build` runs `vue-tsc --noEmit` before `vite build`.
+    - pnpm --filter @app/frontend build
+  artifacts:
+    name: "frontend-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - frontend/dist
+    expire_in: 1 week

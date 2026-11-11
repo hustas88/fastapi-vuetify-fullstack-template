@@ -1,0 +1,104 @@
+# Backend pipeline: lint, test, container build.
+#
+# Component rules: set BUILD_ALL / BUILD_BACKEND (see .gitlab-ci.yml).
+
+.backend-rules:
+  rules:
+    - if: '$BUILD_ALL == "true"'
+      when: on_success
+    - if: '$BUILD_BACKEND == "false"'
+      when: never
+    - if: '$BUILD_BACKEND == "true"'
+      when: on_success
+    - changes:
+        - backend/**/*
+        - ci/backend.gitlab-ci.yml
+        - compose.yml
+        - compose.override.yml
+        - .gitlab-ci.yml
+      when: on_success
+    - when: manual
+      allow_failure: true
+
+.backend-base:
+  image: python:3.15-slim
+  variables:
+    UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
+    UV_COMPILE_BYTECODE: "1"
+    UV_LINK_MODE: "copy"
+  cache:
+    key:
+      files:
+        - backend/uv.lock
+    paths:
+      - .uv-cache/
+  before_script:
+    - pip install --no-cache-dir uv
+    - cd backend
+    - uv sync
+
+backend:lint:
+  extends:
+    - .backend-base
+    - .backend-rules
+  stage: test
+  script:
+    - uv run ruff check .
+    - uv run ruff format --check .
+
+backend:test:
+  extends:
+    - .backend-base
+    - .backend-rules
+  stage: test
+  services:
+    - name: postgres:18-alpine
+      alias: postgres
+  variables:
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: postgres
+    POSTGRES_DB: app_test
+    # Overrides the service connection for the migration smoke test.
+    DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/app_test
+    AUTO_CREATE_SCHEMA: "false"
+  script:
+    # Wait for the PostgreSQL service to accept connections.
+    - >
+      until python -c "import socket; socket.create_connection(('postgres', 5432), 2)"
+      2>/dev/null; do echo "waiting for postgres..."; sleep 1; done
+    - uv run alembic upgrade head
+    - uv run pytest --junitxml=report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: backend/report.xml
+    expire_in: 1 week
+
+backend:docker:
+  extends:
+    - .backend-rules
+  stage: build
+  image: docker:28-cli
+  services:
+    - name: docker:28-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_VERIFY: "1"
+    DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
+    IMAGE: "$CI_REGISTRY_IMAGE/backend"
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    - docker build --pull --target runtime -f backend/Dockerfile -t "$IMAGE:$CI_COMMIT_SHA" .
+    - docker push "$IMAGE:$CI_COMMIT_SHA"
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then
+        docker tag "$IMAGE:$CI_COMMIT_SHA" "$IMAGE:latest"
+        docker push "$IMAGE:latest"
+      fi
+    - |
+      if [ -n "$CI_COMMIT_TAG" ]; then
+        docker tag "$IMAGE:$CI_COMMIT_SHA" "$IMAGE:$CI_COMMIT_TAG"
+        docker push "$IMAGE:$CI_COMMIT_TAG"
+      fi

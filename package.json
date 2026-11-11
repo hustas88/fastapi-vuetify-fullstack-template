@@ -1,0 +1,14 @@
+{
+  "name": "fastapi-vuetify-fullstack-template",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=26"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @app/frontend dev",
+    "build": "pnpm --filter @app/frontend build",
+    "typecheck": "pnpm --filter @app/frontend typecheck"
+  }
+}

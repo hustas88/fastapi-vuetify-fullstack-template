@@ -1,0 +1,35 @@
+# Deployed-like stack: database + API as containers. The SPA is a static site
+# (`make frontend-build` -> `frontend/dist` -> S3); locally it is the Vite dev
+# server from compose.override.yml.
+#
+# Usage: docker compose -f compose.yml up -d --build
+name: ${COMPOSE_PROJECT_NAME:-fastapi-vuetify-fullstack-template}
+
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    # Shared with the backend so the credentials and DATABASE_URL stay in sync
+    # (Postgres only reads POSTGRES_*).
+    env_file: .env.backend
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # postgres:18+ expects the volume at /var/lib/postgresql
+      - pgdata:/var/lib/postgresql
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: runtime
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_started
+    env_file: .env.backend
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+
+volumes:
+  pgdata:
